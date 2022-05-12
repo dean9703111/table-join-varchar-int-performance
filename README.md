@@ -212,6 +212,31 @@ module.exports = {
 取消指定的 Seeder：`sequelize db:seed:undo --seed my_seeder_file.js`
 取消全部 Seeder：`sequelize db:seed:undo:all`
 
+### 搜尋
+
+這邊撰寫一個簡單的 Raw Queries
+```js
+const { sequelize } = require('./models');
+const { QueryTypes } = sequelize;
+
+async function rawQueries () {
+    console.time('rawQueries')
+    const results = await sequelize.query(
+        "SELECT users.name, items.price FROM users\
+         LEFT JOIN orders ON orders.user_id = users.id\
+         LEFT JOIN items ON items.order_id = orders.id\
+         WHERE items.price < 50 LIMIT 5"
+        , { type: QueryTypes.SELECT }
+    );
+    console.log(JSON.stringify(results, null, 2));
+    console.timeEnd('rawQueries')
+}
+rawQueries()
+```
+在終端機輸入：`node row-queries-exmaple.js`
+![image](img/row-queries.png)
+
+
 ### 參考資料
 
 1. [透過 sequelize 來達成 DB Schema Migration](https://hackmd.io/@TSMI_E7ORNeP8YBbWm-lFA/ryCtaVW_M?print-pdf)
