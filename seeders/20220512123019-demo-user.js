@@ -5,7 +5,7 @@ module.exports = {
     // 建立 100 個使用者
     var userArray = [];
 
-    for (let i = 1; i <= 100; i++) {
+    for (let i = 1; i <= 10000; i++) {
       const user = {
         name: `DumpUser${i}`,
         mail: `fake${i}@baobao.com`,

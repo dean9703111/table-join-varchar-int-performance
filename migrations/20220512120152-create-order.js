@@ -8,6 +8,9 @@ module.exports = {
         primaryKey: true,
         type: Sequelize.INTEGER
       },
+      sn: {
+        type: Sequelize.STRING
+      },
       user_id: {
         type: Sequelize.INTEGER,
         references: {
@@ -15,8 +18,12 @@ module.exports = {
           key: 'id'
         },
       },
-      total_price: {
-        type: Sequelize.INTEGER
+      user_name: {
+        type: Sequelize.STRING,
+        references: {
+          model: 'users',
+          key: 'name'
+        },
       },
       createdAt: {
         allowNull: false,
@@ -26,7 +33,7 @@ module.exports = {
         allowNull: false,
         type: Sequelize.DATE
       }
-    });
+    }).then(() => queryInterface.addIndex('orders', ['sn']));
   },
   async down(queryInterface, Sequelize) {
     await queryInterface.dropTable('orders');

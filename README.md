@@ -1,242 +1,151 @@
-# table-join-varchar-int-performance
+# 實驗 Table Join 時，選擇文字欄位（VARCHAR）與數值欄位（INT）在效能（performance）上的差異。
 
-了解 Table Join 時，選擇文字欄位（VARCHAR）與數值欄位（INT）在效能（performance）上的差異。
+因為剛好朋友在專案的搜尋上遇到效能瓶頸，在看過程式碼後，發現他在 Table 做 Join 時都是挑選文字欄位，因此研判這應該就是導致效率低下的主要原因；為了實驗文字欄位（VARCHAR）與數值欄位（INT）在 Join 時的效能差異，特別撰寫了這篇文章，但實驗的結果完全不在我的意料之內...
 
-### 情境模擬:
+### 大綱
 
-假設一個商城的系統，有 1W 個顧客，10W 筆訂單，100W 筆商品明細；使用文字欄位（ex：VARCHAR、CHAR）與數值欄位（ex：INT），在效能上實際會有多少差異。
+- 一、情境說明
+- 二、建立測試 DB、Table
+- 三、設計＆建立模擬資料
+- 四、實驗文字欄位（VARCHAR）與數值欄位（INT）在 Join 時的差異
+- 五、令人意外的總結
 
-# 初探 sequelize，快速了解 Migration、Seeder 如何使用（Node.js、MySQL）
+# 一、情境說明
 
-### 初始化專案
+假設一個商城系統：
 
-```
-mkdir sequelize-demo && cd  sequelize-demo
-npm init
-```
+- 有 1W 個顧客
+- 每位顧客有 10 筆訂單（10W 筆訂單）
+- 每筆訂單有 100 筆購買的商品（1000W 筆購買的商品）
 
-### sequelize
+如果今天想要搜尋某個價格區間的「商品」，有哪些「使用者」購買；使用文字欄位（ex：VARCHAR、CHAR）與數值欄位（ex：INT），在效能上實際會有多少差異。
 
-```
-npm install -g sequelize-cli
-npm install --save sequelize
-```
+---
 
-### mysql
+# 二、建立測試 DB、Table
 
-```
-npm install --save mysql2
-```
+如果想知道詳細的程式，或是打算在 Local 端模擬一樣的環境，大家可以參考我在[GitHub 上面的專案](https://github.com/dean9703111/table-join-varchar-int-performance)
 
-# 實驗步驟
+DB 我選擇的是 MySQL，而 Table 的設計如下：
 
-### STEP 1：建立測試用資料庫
+- users（顧客）
+  | Column | Type | Des |
+  |----------|---------|---------|
+  | id | INTEGER | 自動成長的 id |
+  | name | STRING | 姓名 |
+  | mail | STRING | mail |
 
-```
-mysql -u root -p -e "create database sequelize_demo"
-```
+- order（訂單）
+  | Column | Type | Des |
+  |----------|---------|---------|
+  | id | INTEGER | 自動成長的 id |
+  | sn | STRING | 給人看的訂單序號 |
+  | user_id | INTEGER | 對應顧客(user) 的 id |
+  | user_name | STRING | 對應顧客(user) 的 name |
+  設計「user_id、user_name」是為了對比文字欄位（ex：VARCHAR）與數值欄位（ex：INT）的差異。
 
-### STEP 2：使用 sequelize 建立所需的 table
+- items（購買的商品）
+  | Column | Type | Des |
+  |----------|---------|---------|
+  | id | INTEGER | 自動成長的 id |
+  | name | STRING | 商品名稱 |
+  | price | INTEGER | 商品價格 |
+  | order_id | INTEGER | 對應訂單(order) 的 id |
+  | order_sn | STRING | 對應訂單(ordeer) 的 sn |
+  設計「order_id、order_sn」是為了對比文字欄位（ex：VARCHAR）與數值欄位（ex：INT）的差異。
 
-初始化相關設定擋
+可用如下指令建立資料：
 
-```
-sequelize init
-```
+- Clone 專案：`git clone git@github.com:dean9703111/table-join-varchar-int-performance.git`
+- 安裝套件：`npm install`
+- 安裝 sequelize cli：`npm install -g sequelize-cli`
+- 將 config 資料夾底下的 config.exmaple.json 複製為 config.json，並填入自己的 DB 資訊
+- 建立 DB：`sequelize db:create`
+- 執行 migration 建立 Tables：`sequelize db:migrate`
 
-記得調整成自己的 DB 登入參數
+> 資料都是使用 Node.js 搭配 sequelize 這款套件來建立的，如果想了解詳細使用方式，可以參考我先前的的[文章]()
 
-```json
-"development": {
-    "username": "root",
-    "password": "kingofdragon",
-    "database": "sequelize_demo",
-    "host": "127.0.0.1",
-    "dialect": "mysql"
-  },
-```
-
-新增所需 Tables & 基礎欄位
-
-```
-sequelize model:generate --name user --attributes name:string,mail:string
-sequelize model:generate --name order --attributes user_id:integer,total_price:integer
-sequelize model:generate --name item --attributes order_id:integer,price:integer
-```
-
-![image](img/add-migration.png)
-
-前往 migrations 的資料夾，增加 Table 間的關聯性 & 設計 Index
-
-調整 order Table，建立 order user_id 與 user 的關聯性
-
-```js
-user_id: {
-    type: Sequelize.INTEGER,
-    references: {
-        model: 'users',
-        key: 'id'
-    },
-},
-```
-
-調整 item Table，建立 item order_id 與 item 的關聯性
-
-```js
-oder_id: {
-    type: Sequelize.INTEGER,
-    references: {
-        model: 'orders',
-        key: 'id'
-    },
-},
-```
-
-前往 models 的資料夾，調整 associate，讓各自的關係建立
-
-像是在 models/user.js，一個 user 會有多個 order
-
-```js
-static associate(models) {
-    // define association here
-    this.hasMany(models.order, {
-        foreignKey: 'order_id'
-    });
-}
-```
-
-models/order.js，一個 order 會隸屬於某個 user，並擁有多個 item
-
-```js
-static associate(models) {
-    // define association here
-    this.belongsTo(models.user);
-    this.hasMany(models.item, {
-        foreignKey: 'item_id'
-    });
-}
-```
-
-models/item.js，一個 item 會隸屬於某個 order
-
-```js
-static associate(models) {
-    // define association here
-    this.belongsTo(models.order);
-}
-```
-
-修改完成之後，就可以下指令建立剛剛設定的 Table 啦～
-
-```
-sequelize db:migrate
-```
-
-![image](img/excute-migration.png)
+![image](img/db-migration.png)
 
 下圖是用 MySQLWorkbench 產生的 ER Diagram
-![image](img/er-model.png)
 
-> 如果想要回朔 migration 可用如下指令：
-> 退一個版本：`sequelize db:migrate:undo`
-> 退到初始狀態：`sequelize db:migrate:undo:all`
-> 退到指定版本：`sequelize db:migrate:undo:all --to XXXXXXXXXXXXXX-create-user.js `
+![image](img/er-diagram.png)
 
-### 建立 Seeder，將初始資料塞入 Table
+---
 
-目標：是建立 100 個使用者（user），每個使用者有 10 筆訂單（order），每筆訂單下面有 10 個貨物（item）。
+# 三、設計＆建立模擬資料
 
-先建立 Seeder 檔案
+我們需要設計 3 個 Seeder，將期望的資料塞入
 
+**STEP 1**：建立 1W 個顧客
+**STEP 2**：為每位顧客建立 10 筆訂單（user_id、user_name 需與 user Table 關聯）
+**STEP 3**：為每筆訂單建立 100 筆購買的商品（order_id、order_sn 需與 order Table 關聯）
+
+執行全部 Seeder
 ```
-sequelize seed:generate --name demo-user
-sequelize seed:generate --name demo-order
-sequelize seed:generate --name demo-item
+sequelize db:seed:all
 ```
-
-![image](img/add-seeder.png)
-
-建立各自 Seeder 的邏輯，以前 order 舉例：
-
-```js
-"use strict";
-
-module.exports = {
-  async up(queryInterface, Sequelize) {
-    function getRandomInt(max) {
-      return Math.floor(Math.random() * max);
-    }
-    // 每個使用者有 10 筆訂單（order）
-    var orderArray = [];
-
-    for (let i = 1; i <= 100; i++) {
-      for (let j = 1; j <= 10; j++) {
-        const order = {
-          user_id: i,
-          total_price: Math.floor(Math.random() * 1000),
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
-        orderArray.push(order);
-      }
-    }
-
-    return queryInterface.bulkInsert("Orders", orderArray);
-  },
-
-  async down(queryInterface, Sequelize) {
-    return queryInterface.bulkDelete("Orders", null, {});
-  },
-};
-```
-
-執行 Seeder
-
-執行單個 Seeder：`sequelize db:seed --seed my_seeder_file.js`
-執行全部 Seeder：`sequelize db:seed:all`
-
 ![image](img/excute-seeder.png)
 
-前往 DB 確認是否有正確寫入：
+**STEP 4**：前往 DB ，確認資料是否有正確寫入
+- users Table
+  ![image](img/user-table.png)
+- orders Table
+  ![image](img/order-table.png)
+- items Table
+  ![image](img/item-table.png)
 
-1. 建立 100 個使用者（user）。
-   ![image](img/select-user-table.png)
-2. 建立 100 個使用者（user），每個使用者有 10 筆訂單（order），共 1000 筆資料。
-   ![image](img/select-order-table.png)
-3. 建立 100 個使用者（user），每個使用者有 10 筆訂單（order），每筆訂單下面有 10 個貨物（item），共 10000 筆資料。
-   ![image](img/select-item-table.png)
+---
 
-取消執行的 Seeder
+# 四、比對文字欄位（VARCHAR）與數值欄位（INT）在 Join 時的差異
 
-取消最近的 Seeder：`sequelize db:seed:undo`
-取消指定的 Seeder：`sequelize db:seed:undo --seed my_seeder_file.js`
-取消全部 Seeder：`sequelize db:seed:undo:all`
+在資料建立完後，我們透過下面幾種情境來看看實際上的效能差異：
 
-### 搜尋
+1. 用數值欄位（INT）Join，搜尋單筆資訊：`joinIntFindOne()`
+2. 用數值欄位（INT）Join，設定條件搜尋大量資訊：`joinIntSearchRange()`
+3. 用文字欄位（VARCHAR）Join，搜尋單筆資訊：`joinVarcharFindOne()`
+4. 用文字欄位（VARCHAR）Join，設定條件搜尋大量資訊：`joinVarcharSearchRange()`
 
-這邊撰寫一個簡單的 Raw Queries
-```js
-const { sequelize } = require('./models');
-const { QueryTypes } = sequelize;
+結果執行的結果完全不在我想像範圍之內，在下圖中大家可以看到，無論是用文字欄位（VARCHAR）還是數值欄位（INT）來做Join，搜尋出來的速度居然相差無幾，這個結果有點顛覆我過去的認知。
 
-async function rawQueries () {
-    console.time('rawQueries')
-    const results = await sequelize.query(
-        "SELECT users.name, items.price FROM users\
-         LEFT JOIN orders ON orders.user_id = users.id\
-         LEFT JOIN items ON items.order_id = orders.id\
-         WHERE items.price < 50 LIMIT 5"
-        , { type: QueryTypes.SELECT }
-    );
-    console.log(JSON.stringify(results, null, 2));
-    console.timeEnd('rawQueries')
-}
-rawQueries()
+![image](img/query-100-postive.png)
+
+你以為我就會臣服於這個實現結果嗎？不！我要再做一個測試！
+
+改變如下參數：
+1. 在建立訂單（order）的 Seeder 時，故意將 user_id、name 反向排序
+1. 在建立訂單（item）的 Seeder 時，故意將 order_id、sn 反向排序
+
+> 上述可透過調整 .env 的 CREATE_TABLE_SORT 來設定要正向（postive）還是反向（reverse）
+
+透過如下指令將 DB、Table 重建，並重新執行 Migration、Seeder
 ```
-在終端機輸入：`node row-queries-exmaple.js`
-![image](img/row-queries.png)
+sequelize db:migrate:undo:all
+sequelize db:migrate
+sequelize db:seed:all
+```
 
+調整後的 orders、items 的 Table 內容
+![image](img/order-reverse-table.png)
+![image](img/item-reverse-table.png)
 
-### 參考資料
+接著再執行一次程式，但結果讓我非常意外😱😱😱，居然兩者實際花費的時間是差不多的😫
+![image](img/query-100-reverse.png)
 
-1. [透過 sequelize 來達成 DB Schema Migration](https://hackmd.io/@TSMI_E7ORNeP8YBbWm-lFA/ryCtaVW_M?print-pdf)
+# 五、令人意外的總結
+
+老實說，我完全沒想到實驗的結果；因為在我過往的認知中，兩者的所許花費的時間差異應該會相當大。
+
+當然也有可能是因為我的實驗情境不夠完善、查詢數量不夠所導致
+
+> 筆者有嘗試將 item 數量增加到 1000W 筆，但實驗的結果還是差不多💀
+
+當然實務上還是建議用數值欄位（INT）來做 Join，從演算法的邏輯來講會更省空間，文字欄位（VARCHAR）主要的作用還是給使用者觀看的。
+
+如果對實驗有其他的建議，也歡迎大家留言，筆者相信討論能增進彼此的成長。
+
+> 本篇是從「搜尋花費時間」的角度來實驗，歡迎高手從硬體消耗資源的角度來實驗
+
+### 關聯專案
+
+1. [sequelize-mysql-migration-seeder](https://github.com/dean9703111/sequelize-mysql-migration-seeder)
