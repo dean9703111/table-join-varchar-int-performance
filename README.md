@@ -4,11 +4,12 @@
 
 ### 大綱
 
-- 一、情境說明
-- 二、建立測試 DB、Table
+- 一、模擬情境說明
+- 二、在 DB 建立測試測試對照組 Table
 - 三、設計＆建立模擬資料
-- 四、實驗文字欄位（VARCHAR）與數值欄位（INTEGER）在 Join 時的差異
-- 五、令人意外的總結
+- 四、設計測試程式
+- 五、模擬每個情境，取得測試結果
+- 六、令人意外的總結
 
 # 一、模擬情境說明
 
@@ -77,7 +78,7 @@ DB 我選擇的是 MySQL，而 Table 的設計如下：
 ![image](img/create-db.png)
 ![image](img/migration.png)
 
-> 在沒設計 Index 的 Table（users/orders） 對照組中，會新增一個 user_id/order_id 的欄位，此欄位內容與 id 欄位相同，單純用來測試效能用的。
+> 在沒設計 Index 的 Table（users/orders） 對照組中，會新增 user_id/order_id 的欄位，此欄位內容與 id 欄位相同，單純用來測試效能用的。
 
 ---
 
@@ -97,7 +98,7 @@ sequelize db:seed:all
 
 ![image](img/excute-seeder.png)
 
-> 因為沒建立 Index 的 Table 搜尋效能比想像的更加悲劇，所以在這個情境下將 User 的數量減為 1/10，也就是說購買上品的數量只有 10W 筆。
+> 因為沒建立 Index 的 Table 搜尋效能比想像的更加悲劇，所以在這個情境下將 User 的數量減為 1/10，也就是說購買商品(item)的數量只有 10W 筆。
 
 ---
 
@@ -252,7 +253,7 @@ ER Diagram
 
 ---
 
-# 五、令人意外的總結
+# 六、令人意外的總結
 
 這邊先列出比較表，方便大家理解：
 
@@ -266,11 +267,11 @@ ER Diagram
 | VARCHAR 設定條件的批量查詢 | 6s | 4.8s | 44.2s |
 
 在這張表裡面有我預料的結果，也有我沒想到的結果，我歸類如下：
-- 批量查詢時，如果有設定 Foreign Key、Index，INTEGER 的搜尋效率優於 VARCHAR
-- 在有設定 Foreign Key、Index，那單筆、多筆查詢的效率是差不多的，跟使用 INTEGER 還是 VARCHAR 關聯性不大
-- Foreign Key 的搜尋效率略低於 Index（可能是我在資料表上設計的不足）
-- 如果沒建立 Index，那搜尋效率慘不忍睹
-- 如果沒建立 Index，在批量查詢時，INTEGER 查詢效率低於 VARCHAR（這部分我真的搞不懂為什麼）
+- 批量查詢時，如果有設定 Foreign Key、Index，INTEGER 的搜尋效率優於 VARCHAR。
+- 在有設定 Foreign Key、Index，那單筆、多筆查詢的效率是差不多的，跟使用 INTEGER 還是 VARCHAR 關聯性不大。
+- Foreign Key 的搜尋效率略低於 Index（可能是我在資料表上設計的不足）。
+- 如果沒建立 Index，那搜尋效率慘不忍睹。
+- 如果沒建立 Index，在批量查詢時，INTEGER 查詢效率低於 VARCHAR（這部分我真的搞不懂為什麼）。
 
 老實說，這個實驗結果反而把我弄得有點迷糊，也許還要從更多面向做測試，追尋知識的道路真的任重道遠🤕
 
