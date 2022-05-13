@@ -42,6 +42,7 @@ DB 我選擇的是 MySQL，而 Table 的設計如下：
   | sn | STRING | 給人看的訂單序號 |
   | user_id | INTEGER | 對應顧客(user) 的 id |
   | user_name | STRING | 對應顧客(user) 的 name |
+
   設計「user_id、user_name」是為了對比文字欄位（ex：VARCHAR）與數值欄位（ex：INT）的差異。
 
 - items（購買的商品）
@@ -52,6 +53,7 @@ DB 我選擇的是 MySQL，而 Table 的設計如下：
   | price | INTEGER | 商品價格 |
   | order_id | INTEGER | 對應訂單(order) 的 id |
   | order_sn | STRING | 對應訂單(ordeer) 的 sn |
+
   設計「order_id、order_sn」是為了對比文字欄位（ex：VARCHAR）與數值欄位（ex：INT）的差異。
 
 可用如下指令建立資料：
@@ -144,7 +146,7 @@ sequelize db:seed:all
 
 如果對實驗有其他的建議，也歡迎大家留言，筆者相信討論能增進彼此的成長。
 
-> 本篇是從「搜尋花費時間」的角度來實驗，歡迎高手從硬體消耗資源的角度來實驗
+> 本篇是從「搜尋花費時間」的角度來實驗，歡迎高手從硬體消耗資源的角度來實驗。
 
 ### 關聯專案
 
