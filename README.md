@@ -81,7 +81,7 @@ DB 我選擇的是 MySQL，而 Table 的設計如下：
 
 **STEP 1**：建立 1W 個顧客
 **STEP 2**：為每位顧客建立 10 筆訂單（user_id、user_name 需與 user Table 關聯）
-**STEP 3**：為每筆訂單建立 100 筆購買的商品（order_id、order_sn 需與 order Table 關聯）
+**STEP 3**：為每筆訂單建立 10 筆購買的商品（order_id、order_sn 需與 order Table 關聯）
 
 執行全部 Seeder
 ```
