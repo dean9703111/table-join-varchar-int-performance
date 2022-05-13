@@ -1,13 +1,13 @@
-# 實驗 Table Join 時，選擇文字欄位（VARCHAR）與數值欄位（INT）在效能（performance）上的差異。
+# 實驗 Table Join 時，選擇文字欄位（VARCHAR）與數值欄位（INTEGER）在效能（performance）上的差異。
 
-因為剛好朋友在專案的搜尋上遇到效能瓶頸，在看過程式碼後，發現他在 Table 做 Join 時都是挑選文字欄位，因此研判這應該就是導致效率低下的主要原因；為了實驗文字欄位（VARCHAR）與數值欄位（INT）在 Join 時的效能差異，特別撰寫了這篇文章，但實驗的結果完全不在我的意料之內...
+因為剛好朋友在專案的搜尋上遇到效能瓶頸，在看過程式碼後，發現他在 Table 做 Join 時都是挑選文字欄位，因此研判這應該就是導致效率低下的主要原因；為了實驗文字欄位（VARCHAR）與數值欄位（INTEGER）在 Join 時的效能差異，特別撰寫了這篇文章，但實驗的結果完全不在我的意料之內...
 
 ### 大綱
 
 - 一、情境說明
 - 二、建立測試 DB、Table
 - 三、設計＆建立模擬資料
-- 四、實驗文字欄位（VARCHAR）與數值欄位（INT）在 Join 時的差異
+- 四、實驗文字欄位（VARCHAR）與數值欄位（INTEGER）在 Join 時的差異
 - 五、令人意外的總結
 
 # 一、模擬情境說明
@@ -18,7 +18,7 @@
 - 每位顧客有 10 筆訂單（10W 筆訂單）
 - 每筆訂單有 10 筆購買的商品（100W 筆購買的商品）
 
-如果今天想要搜尋某個價格區間的「商品」，有哪些「使用者」購買；使用文字欄位（ex：VARCHAR、CHAR）與數值欄位（ex：INT），在效能上實際會有多少差異。
+如果今天想要搜尋某個價格區間的「商品」，有哪些「使用者」購買；使用文字欄位（ex：VARCHAR、CHAR）與數值欄位（ex：INTEGER），在效能上實際會有多少差異。
 
 ---
 
@@ -43,7 +43,7 @@ DB 我選擇的是 MySQL，而 Table 的設計如下：
   | user_id | INTEGER | 對應顧客(user) 的 id |
   | user_name | STRING | 對應顧客(user) 的 name |
 
-  設計「user_id、user_name」是為了對比文字欄位（ex：VARCHAR）與數值欄位（ex：INT）的差異。
+  設計「user_id、user_name」是為了對比文字欄位（ex：VARCHAR）與數值欄位（ex：INTEGER）的差異。
 
 - items（購買的商品）
   | Column | Type | Des |
@@ -54,7 +54,7 @@ DB 我選擇的是 MySQL，而 Table 的設計如下：
   | order_id | INTEGER | 對應訂單(order) 的 id |
   | order_sn | STRING | 對應訂單(order) 的 sn |
 
-  設計「order_id、order_sn」是為了對比文字欄位（ex：VARCHAR）與數值欄位（ex：INT）的差異。
+  設計「order_id、order_sn」是為了對比文字欄位（ex：VARCHAR）與數值欄位（ex：INTEGER）的差異。
 
 可用如下指令建立資料：
 
@@ -65,7 +65,7 @@ DB 我選擇的是 MySQL，而 Table 的設計如下：
 - 建立 DB：`sequelize db:create`
 - 執行 migration 建立 Tables：`sequelize db:migrate`
 
-> 資料都是使用 Node.js 搭配 sequelize 這款套件來建立的，如果想了解詳細使用方式，可以參考我先前的的[文章]()
+> 資料都是使用 Node.js 搭配 sequelize 這款套件來建立的，如果想了解詳細使用方式，可以參考我先前的的[文章](https://medium.com/dean-lin/%E5%88%9D%E6%8E%A2-sequelize-%E5%9C%A8-node-js-%E5%BF%AB%E9%80%9F%E5%BB%BA%E7%AB%8B-migration-seeder-mysql-b8a16d2ff73e)
 
 ![image](img/db-migration.png)
 
@@ -99,20 +99,20 @@ sequelize db:seed:all
 
 ---
 
-# 四、比對文字欄位（VARCHAR）與數值欄位（INT）在 Join 時的差異
+# 四、比對文字欄位（VARCHAR）與數值欄位（INTEGER）在 Join 時的差異
 
 **STEP 1**：撰寫測試程式
 
 在資料建立完後，我們透過下面幾種情境來看看實際上的效能差異：
 
-1. 用數值欄位（INT）Join，搜尋單筆資訊：`joinIntFindOne()`
-2. 用數值欄位（INT）Join，設定條件搜尋大量資訊：`joinIntSearchRange()`
+1. 用數值欄位（INTEGER）Join，搜尋單筆資訊：`joinIntFindOne()`
+2. 用數值欄位（INTEGER）Join，設定條件搜尋大量資訊：`joinIntSearchRange()`
 3. 用文字欄位（VARCHAR）Join，搜尋單筆資訊：`joinVarcharFindOne()`
 4. 用文字欄位（VARCHAR）Join，設定條件搜尋大量資訊：`joinVarcharSearchRange()`
 
 **STEP 2**：測試並取得結果
 
-結果執行的結果完全不在我想像範圍之內，在下圖中大家可以看到，無論是用文字欄位（VARCHAR）還是數值欄位（INT）來做Join，搜尋出來的速度居然相差無幾，這個結果有點顛覆我過去的認知。
+結果執行的結果完全不在我想像範圍之內，在下圖中大家可以看到，無論是用文字欄位（VARCHAR）還是數值欄位（INTEGER）來做Join，搜尋出來的速度居然相差無幾，這個結果有點顛覆我過去的認知。
 
 ![image](img/query-100-postive.png)
 
@@ -150,7 +150,7 @@ sequelize db:seed:all
 
 > 筆者有嘗試將 item 數量增加到 1000W 筆，但實驗的結果還是差不多💀
 
-當然實務上還是建議用數值欄位（INT）來做 Join，從演算法的邏輯來講會更省空間，文字欄位（VARCHAR）主要的作用還是給使用者觀看的。
+當然實務上還是建議用數值欄位（INTEGER）來做 Join，從演算法的邏輯來講會更省空間，文字欄位（VARCHAR）主要的作用還是給使用者觀看的。
 
 如果對實驗有其他的建議，也歡迎大家留言，筆者相信討論能增進彼此的成長。
 
