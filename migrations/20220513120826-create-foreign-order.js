@@ -1,31 +1,28 @@
 'use strict';
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.createTable('items', {
+    await queryInterface.createTable('foreign_orders', {
       id: {
         allowNull: false,
         autoIncrement: true,
         primaryKey: true,
         type: Sequelize.INTEGER
       },
-      name: {
+      sn: {
         type: Sequelize.STRING
       },
-      price: {
-        type: Sequelize.INTEGER
-      },
-      order_id: {
+      user_id: {
         type: Sequelize.INTEGER,
         references: {
-          model: 'orders',
+          model: 'foreign_users',
           key: 'id'
         },
       },
-      order_sn: {
+      user_name: {
         type: Sequelize.STRING,
         references: {
-          model: 'orders',
-          key: 'sn'
+          model: 'foreign_users',
+          key: 'name'
         },
       },
       createdAt: {
@@ -36,9 +33,9 @@ module.exports = {
         allowNull: false,
         type: Sequelize.DATE
       }
-    });
+    }).then(() => queryInterface.addIndex('foreign_orders', ['sn']));
   },
   async down(queryInterface, Sequelize) {
-    await queryInterface.dropTable('items');
+    await queryInterface.dropTable('foreign_orders');
   }
 };

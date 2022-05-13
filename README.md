@@ -1,6 +1,6 @@
 # 實驗 Table Join 時，選擇文字欄位（VARCHAR）與數值欄位（INTEGER）在效能（performance）上的差異。
 
-因為剛好朋友在專案的搜尋上遇到效能瓶頸，在看過程式碼後，發現他在 Table 做 Join 時都是挑選文字欄位，因此研判這應該就是導致效率低下的主要原因；為了實驗文字欄位（VARCHAR）與數值欄位（INTEGER）在 Join 時的效能差異，特別撰寫了這篇文章，但實驗的結果完全不在我的意料之內...
+因為剛好朋友在專案的搜尋上遇到效能瓶頸，在看過程式碼後，發現他在 Table 做 Join 時都是挑選文字欄位，因此研判這應該就是導致效率低下的主要原因；為了實驗文字欄位（VARCHAR）與數值欄位（INTEGER）在 Join 時的效能差異，特別撰寫了這篇文章，但有些實驗結果打破了我過往的認知
 
 ### 大綱
 
@@ -18,13 +18,19 @@
 - 每位顧客有 10 筆訂單（10W 筆訂單）
 - 每筆訂單有 10 筆購買的商品（100W 筆購買的商品）
 
-如果今天想要搜尋某個價格區間的「商品」，有哪些「使用者」購買；使用文字欄位（ex：VARCHAR、CHAR）與數值欄位（ex：INTEGER），在效能上實際會有多少差異。
+如果今天想要搜尋某個價格區間的「商品」，有哪些「使用者」購買；使用文字欄位（ex：VARCHAR）與數值欄位（ex：INTEGER），在效能上實際會有多少差異。
 
 ---
 
-# 二、建立測試 DB、Table
+# 二、在 DB 建立測試測試對照組 Table
 
 如果想知道詳細的程式，或是打算在 Local 端模擬一樣的環境，大家可以參考我在[GitHub 上面的專案](https://github.com/dean9703111/table-join-varchar-int-performance)
+
+這裡我們分成 3 種情境來做測試：
+
+**情境 A**： 將 Join 的欄位設計 Foreign Key，搜尋用到的欄位也設計 Index
+**情境 B**： 將 Foreign Key 的設計拿掉，改為使用 Index
+**情境 C**： 把 Index 全部拿到，來看看到底有多慘
 
 DB 我選擇的是 MySQL，而 Table 的設計如下：
 
@@ -42,6 +48,7 @@ DB 我選擇的是 MySQL，而 Table 的設計如下：
   | sn | STRING | 給人看的訂單序號 |
   | user_id | INTEGER | 對應顧客(user) 的 id |
   | user_name | STRING | 對應顧客(user) 的 name |
+  | order_id | INTEGER | 內容與 id 相同，用來測試沒 Index 時的效能 |
 
   設計「user_id、user_name」是為了對比文字欄位（ex：VARCHAR）與數值欄位（ex：INTEGER）的差異。
 
@@ -67,11 +74,10 @@ DB 我選擇的是 MySQL，而 Table 的設計如下：
 
 > 資料都是使用 Node.js 搭配 sequelize 這款套件來建立的，如果想了解詳細使用方式，可以參考我先前的的[文章](https://medium.com/dean-lin/%E5%88%9D%E6%8E%A2-sequelize-%E5%9C%A8-node-js-%E5%BF%AB%E9%80%9F%E5%BB%BA%E7%AB%8B-migration-seeder-mysql-b8a16d2ff73e)
 
-![image](img/db-migration.png)
+![image](img/create-db.png)
+![image](img/migration.png)
 
-下圖是用 MySQLWorkbench 產生的 ER Diagram
-
-![image](img/er-diagram.png)
+> 在沒設計 Index 的 Table（users/orders） 對照組中，會新增一個 user_id/order_id 的欄位，此欄位內容與 id 欄位相同，單純用來測試效能用的。
 
 ---
 
@@ -84,75 +90,189 @@ DB 我選擇的是 MySQL，而 Table 的設計如下：
 **STEP 3**：為每筆訂單建立 10 筆購買的商品（order_id、order_sn 需與 order Table 關聯）
 
 執行全部 Seeder
+
 ```
 sequelize db:seed:all
 ```
+
 ![image](img/excute-seeder.png)
 
-**STEP 4**：前往 DB ，確認資料是否有正確寫入
-- users Table
-  ![image](img/user-table.png)
-- orders Table
-  ![image](img/order-table.png)
-- items Table
-  ![image](img/item-table.png)
+> 因為沒建立 Index 的 Table 搜尋效能比想像的更加悲劇，所以在這個情境下將 User 的數量減為 1/10，也就是說購買上品的數量只有 10W 筆。
 
 ---
 
-# 四、比對文字欄位（VARCHAR）與數值欄位（INTEGER）在 Join 時的差異
+# 四、設計測試程式
 
-**STEP 1**：撰寫測試程式
+我們需要設計一個可以根據上面 3 種情境測試的程式，同時用 3 種常見的查詢來比較各自的效能：
 
-在資料建立完後，我們透過下面幾種情境來看看實際上的效能差異：
+1. 單筆查詢：`findOne`
+2. 多筆查詢：`findMutiple`
+3. 設定條件的批量查詢 ：`searchRange`
 
-1. 用數值欄位（INTEGER）Join，搜尋單筆資訊：`joinIntFindOne()`
-2. 用數值欄位（INTEGER）Join，設定條件搜尋大量資訊：`joinIntSearchRange()`
-3. 用文字欄位（VARCHAR）Join，搜尋單筆資訊：`joinVarcharFindOne()`
-4. 用文字欄位（VARCHAR）Join，設定條件搜尋大量資訊：`joinVarcharSearchRange()`
+程式放在下面，有興趣再看就好，這不是本文的重點，我知道還有很多細節可以優化 😇
 
-**STEP 2**：測試並取得結果
+```js
+const { sequelize } = require("./models");
+const { QueryTypes } = sequelize;
+function getJoinCol (colType, setting) {
+    let orderJoinCol = "";
+    let itemJoinCol = ""
+    if (setting === "" && colType === "Int") {
+        orderJoinCol = `orders.user_id = users.user_id`
+        itemJoinCol = `items.order_id = orders.order_id`
+    } else if (colType === "Int") {
+        orderJoinCol = `${setting}orders.user_id = ${setting}users.id`
+        itemJoinCol = `${setting}items.order_id = ${setting}orders.id`
+    } else if (colType === "VarChar") {
+        orderJoinCol = `${setting}orders.user_name = ${setting}users.name`
+        itemJoinCol = `${setting}items.order_sn = ${setting}orders.sn`
+    }
+    return { "orderJoinCol": orderJoinCol, "itemJoinCol": itemJoinCol }
+}
+async function findOne (colType, setting) {
+    console.time(`${colType}-${setting}FindOne`);
+    let {orderJoinCol,itemJoinCol} = getJoinCol (colType, setting)
+    const results = await sequelize.query(`SELECT 
+           ${setting}users.name, ${setting}items.price FROM ${setting}users
+           LEFT JOIN ${setting}orders ON ${orderJoinCol}
+           LEFT JOIN ${setting}items ON ${itemJoinCol}
+           WHERE ${setting}items.name = 'Dumpitem5000-10-10'`, { type: QueryTypes.SELECT });
+    console.timeEnd(`${colType}-${setting}FindOne`);
+}
+async function findMutiple (colType, setting) {
+    console.time(`${colType}-${setting}FindMutiple`);
+    let {orderJoinCol,itemJoinCol} = getJoinCol (colType, setting)
+    const results = await sequelize.query(`SELECT 
+           ${setting}users.name, ${setting}items.price FROM ${setting}users
+           LEFT JOIN ${setting}orders ON ${orderJoinCol}
+           LEFT JOIN ${setting}items ON ${itemJoinCol}
+           WHERE ${setting}items.name in 
+            ('Dumpitem3000-10-10','Dumpitem5000-10-10','Dumpitem7500-10-10')`
+        , { type: QueryTypes.SELECT });
+    console.timeEnd(`${colType}-${setting}FindMutiple`);
+}
+async function searchRange (colType, setting) {
+    console.time(`${colType}-${setting}SearchRange`);
+    let {orderJoinCol,itemJoinCol} = getJoinCol (colType, setting)
+    const results = await sequelize.query(`SELECT 
+           ${setting}users.name, ${setting}items.price FROM ${setting}users
+           LEFT JOIN ${setting}orders ON ${orderJoinCol}
+           LEFT JOIN ${setting}items ON ${itemJoinCol}
+           WHERE ${setting}items.price < 80`, { type: QueryTypes.SELECT });
+    console.timeEnd(`${colType}-${setting}SearchRange`);
+}
 
-結果執行的結果完全不在我想像範圍之內，在下圖中大家可以看到，無論是用文字欄位（VARCHAR）還是數值欄位（INTEGER）來做Join，搜尋出來的速度居然相差無幾，這個結果有點顛覆我過去的認知。
+function test (type) {
+    switch (type) {
+        case 'foreign':
+            findOne("Int", "foreign_");
+            findMutiple("Int", "foreign_");
+            searchRange("Int", "foreign_");
+            findOne("VarChar", "foreign_");
+            findMutiple("VarChar", "foreign_");
+            searchRange("VarChar", "foreign_");
+            break;
+        case 'index':
+            findOne("Int", "index_");
+            findMutiple("Int", "index_");
+            searchRange("Int", "index_");
+            findOne("VarChar", "index_");
+            findMutiple("VarChar", "index_");
+            searchRange("VarChar", "index_");
+            break;
+        default:
+            findOne("Int", "");
+            findMutiple("Int", "");
+            searchRange("Int", "");
+            findOne("VarChar", "");
+            findMutiple("VarChar", "");
+            searchRange("VarChar", "");
+    }
+}
 
-![image](img/query-100-postive.png)
-
-**STEP 3**：建立反向的資料來做測試
-
-你以為我就會臣服於這個實現結果嗎？不！我要再做一個測試！
-
-改變如下參數：
-1. 在建立訂單（order）的 Seeder 時，故意將 user_id、name 反向排序
-1. 在建立訂單（item）的 Seeder 時，故意將 order_id、sn 反向排序
-
-> 上述可透過調整 .env 的 CREATE_TABLE_SORT 來設定要正向（postive）還是反向（reverse）
-
-透過如下指令將 DB、Table 重建，並重新執行 Migration、Seeder
+// test("foreign")//有建立 foreign Key 的
+// test("index")//有建立 index 的
+test()//什麼都沒有設定的
 ```
-sequelize db:migrate:undo:all
-sequelize db:migrate
-sequelize db:seed:all
-```
 
-調整後的 orders、items 的 Table 內容
-![image](img/order-reverse-table.png)
-![image](img/item-reverse-table.png)
+---
 
-**STEP 4**：測試反向的資料對搜尋效能的影響
+# 五、模擬每個情境，取得測試結果
 
-執行程式後的結果讓我非常意外😱😱😱，居然兩者實際花費的時間是差不多的😫
-![image](img/query-100-reverse.png)
+**➤ 情境 A**： 將 Join 的欄位設計 Foreign Key，搜尋用到的欄位也設計 Index
+
+ER Diagram
+![image](img/foreign-er-diagram.png)
+
+執行程式
+![image](img/foreign-excute-result.png)
+
+測試數據：
+
+- INTEGER 單筆查詢：787.003ms
+- INTEGER 多筆查詢：773.931ms
+- INTEGER 設定條件的批量查詢：3.555s
+- VARCHAR 單筆查詢：767.987ms
+- VARCHAR 多筆查詢：773.861ms
+- VARCHAR 設定條件的批量查詢：6.049s
+
+**➤ 情境 B**： 將 Foreign Key 的設計拿掉，改為使用 Index
+
+ER Diagram
+![image](img/index-er-diagram.png)
+
+執行程式
+![image](img/index-excute-result.png)
+
+測試數據：
+
+- INTEGER 單筆查詢：464.168ms
+- INTEGER 多筆查詢：540.567ms
+- INTEGER 設定條件的批量查詢：2.624s
+- VARCHAR 單筆查詢：447.98ms
+- VARCHAR 多筆查詢：549.225ms
+- VARCHAR 設定條件的批量查詢：4.824s
+
+**➤ 情境 C**： 把 Index 全部拿到，來看看到底有多慘
+
+ER Diagram
+![image](img/er-diagram.png)
+
+執行程式
+![image](img/excute-result.png)
+
+測試數據：
+
+- INTEGER 單筆查詢：1.217s
+- INTEGER 多筆查詢：1.205s
+- INTEGER 設定條件的批量查詢：3:08.252 (m:ss.mmm)
+- VARCHAR 單筆查詢：1.755s
+- VARCHAR 多筆查詢：1.964s
+- VARCHAR 設定條件的批量查詢：44.285s
+
+---
 
 # 五、令人意外的總結
 
-老實說，我完全沒想到實驗的結果；因為在我過往的認知中，兩者的所需花費的時間差異應該會相當大。
+這邊先列出比較表，方便大家理解：
 
-當然也有可能是因為我的實驗情境不夠完善、查詢數量不夠所導致
+|  | 用 Foreign Key | 用 Index | 什麼都沒用 |
+|----------|---------|---------|---------|
+| INTEGER 單筆查詢 | 0.78s | 0.46s | 1.2s |
+| INTEGER 多筆查詢 | 0.77s | 0.54s | 1.2s |
+| INTEGER 設定條件的批量查詢 | 3.5s | 2.6s | 188s |
+| VARCHAR 單筆查詢 | 0.76s | 0.44s | 1.7s |
+| VARCHAR 多筆查詢 | 0.77s | 0.55s | 1.9s |
+| VARCHAR 設定條件的批量查詢 | 6s | 4.8s | 44.2s |
 
-> 筆者有嘗試將 item 數量增加到 1000W 筆，但實驗的結果還是差不多💀
+在這張表裡面有我預料的結果，也有我沒想到的結果，我歸類如下：
+- 批量查詢時，如果有設定 Foreign Key、Index，INTEGER 的搜尋效率優於 VARCHAR
+- 在有設定 Foreign Key、Index 的狀況下，單筆、多筆查詢的效率是差不多的，跟使用 INTEGER 還是 VARCHAR 關聯性不大
+- Foreign Key 的搜尋效率略低於 Index（可能是我在資料表上設計的不足）
+- 如果沒建立 Index，那搜尋效率慘不忍睹
+- 如果沒建立 Index，在批量查詢時，INTEGER 查詢效率低於 VARCHAR（這部分我真的搞不懂為什麼）
 
-當然實務上還是建議用數值欄位（INTEGER）來做 Join，從演算法的邏輯來講會更省空間，文字欄位（VARCHAR）主要的作用還是給使用者觀看的。
-
-如果對實驗有其他的建議，也歡迎大家留言，筆者相信討論能增進彼此的成長。
+老實說，這個實驗結果反而把我弄得有點迷糊，也許還要從更多面向做測試，追尋知識的道路真的任重道遠🤕
 
 > 本篇是從「搜尋花費時間」的角度來實驗，歡迎高手從硬體消耗資源的角度來實驗。
 
