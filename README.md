@@ -31,7 +31,7 @@
 
 **情境 A**： 將 Join 的欄位設計 Foreign Key，搜尋用到的欄位也設計 Index
 **情境 B**： 將 Foreign Key 的設計拿掉，改為使用 Index
-**情境 C**： 把 Index 全部拿到，來看看到底有多慘
+**情境 C**： 把 Index 全部拿掉，來看看到底有多慘
 
 DB 我選擇的是 MySQL，而 Table 的設計如下：
 
@@ -234,7 +234,7 @@ ER Diagram
 - VARCHAR 多筆查詢：549.225ms
 - VARCHAR 設定條件的批量查詢：4.824s
 
-**➤ 情境 C**： 把 Index 全部拿到，來看看到底有多慘
+**➤ 情境 C**： 把 Index 全部拿掉，來看看到底有多慘
 
 ER Diagram
 ![image](img/er-diagram.png)
