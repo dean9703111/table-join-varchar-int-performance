@@ -10,13 +10,13 @@
 - 四、實驗文字欄位（VARCHAR）與數值欄位（INT）在 Join 時的差異
 - 五、令人意外的總結
 
-# 一、情境說明
+# 一、模擬情境說明
 
 假設一個商城系統：
 
 - 有 1W 個顧客
 - 每位顧客有 10 筆訂單（10W 筆訂單）
-- 每筆訂單有 100 筆購買的商品（1000W 筆購買的商品）
+- 每筆訂單有 10 筆購買的商品（100W 筆購買的商品）
 
 如果今天想要搜尋某個價格區間的「商品」，有哪些「使用者」購買；使用文字欄位（ex：VARCHAR、CHAR）與數值欄位（ex：INT），在效能上實際會有多少差異。
 
@@ -35,7 +35,7 @@ DB 我選擇的是 MySQL，而 Table 的設計如下：
   | name | STRING | 姓名 |
   | mail | STRING | mail |
 
-- order（訂單）
+- orders（訂單）
   | Column | Type | Des |
   |----------|---------|---------|
   | id | INTEGER | 自動成長的 id |
@@ -52,7 +52,7 @@ DB 我選擇的是 MySQL，而 Table 的設計如下：
   | name | STRING | 商品名稱 |
   | price | INTEGER | 商品價格 |
   | order_id | INTEGER | 對應訂單(order) 的 id |
-  | order_sn | STRING | 對應訂單(ordeer) 的 sn |
+  | order_sn | STRING | 對應訂單(order) 的 sn |
 
   設計「order_id、order_sn」是為了對比文字欄位（ex：VARCHAR）與數值欄位（ex：INT）的差異。
 
@@ -101,6 +101,8 @@ sequelize db:seed:all
 
 # 四、比對文字欄位（VARCHAR）與數值欄位（INT）在 Join 時的差異
 
+**STEP 1**：撰寫測試程式
+
 在資料建立完後，我們透過下面幾種情境來看看實際上的效能差異：
 
 1. 用數值欄位（INT）Join，搜尋單筆資訊：`joinIntFindOne()`
@@ -108,9 +110,13 @@ sequelize db:seed:all
 3. 用文字欄位（VARCHAR）Join，搜尋單筆資訊：`joinVarcharFindOne()`
 4. 用文字欄位（VARCHAR）Join，設定條件搜尋大量資訊：`joinVarcharSearchRange()`
 
+**STEP 2**：測試並取得結果
+
 結果執行的結果完全不在我想像範圍之內，在下圖中大家可以看到，無論是用文字欄位（VARCHAR）還是數值欄位（INT）來做Join，搜尋出來的速度居然相差無幾，這個結果有點顛覆我過去的認知。
 
 ![image](img/query-100-postive.png)
+
+**STEP 3**：建立反向的資料來做測試
 
 你以為我就會臣服於這個實現結果嗎？不！我要再做一個測試！
 
@@ -131,12 +137,14 @@ sequelize db:seed:all
 ![image](img/order-reverse-table.png)
 ![image](img/item-reverse-table.png)
 
-接著再執行一次程式，但結果讓我非常意外😱😱😱，居然兩者實際花費的時間是差不多的😫
+**STEP 4**：測試反向的資料對搜尋效能的影響
+
+執行程式後的結果讓我非常意外😱😱😱，居然兩者實際花費的時間是差不多的😫
 ![image](img/query-100-reverse.png)
 
 # 五、令人意外的總結
 
-老實說，我完全沒想到實驗的結果；因為在我過往的認知中，兩者的所許花費的時間差異應該會相當大。
+老實說，我完全沒想到實驗的結果；因為在我過往的認知中，兩者的所需花費的時間差異應該會相當大。
 
 當然也有可能是因為我的實驗情境不夠完善、查詢數量不夠所導致
 
