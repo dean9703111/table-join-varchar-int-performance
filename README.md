@@ -267,7 +267,7 @@ ER Diagram
 
 在這張表裡面有我預料的結果，也有我沒想到的結果，我歸類如下：
 - 批量查詢時，如果有設定 Foreign Key、Index，INTEGER 的搜尋效率優於 VARCHAR
-- 在有設定 Foreign Key、Index 的狀況下，單筆、多筆查詢的效率是差不多的，跟使用 INTEGER 還是 VARCHAR 關聯性不大
+- 在有設定 Foreign Key、Index，那單筆、多筆查詢的效率是差不多的，跟使用 INTEGER 還是 VARCHAR 關聯性不大
 - Foreign Key 的搜尋效率略低於 Index（可能是我在資料表上設計的不足）
 - 如果沒建立 Index，那搜尋效率慘不忍睹
 - 如果沒建立 Index，在批量查詢時，INTEGER 查詢效率低於 VARCHAR（這部分我真的搞不懂為什麼）
